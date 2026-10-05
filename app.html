@@ -1,0 +1,189 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SpecWhy app - which CSS rule wins?</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:-apple-system,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;background:#f7f2fb;color:#2a1b3a;line-height:1.5}
+.wrap{max-width:900px;margin:0 auto;padding:26px 16px 50px}
+h1{font-size:30px}h1 span{color:#c026d3}.sub{color:#6e5a80;margin:6px 0 14px}
+label{display:block;font-size:13px;color:#6e5a80;margin:10px 0 4px}
+textarea{width:100%;height:150px;background:#fff;color:#2a1b3a;border:1px solid #dac9ea;border-radius:8px;padding:9px 10px;font:14px ui-monospace,Menlo,Consolas,monospace;resize:vertical;white-space:pre}
+.pre button{background:#fff;color:#a21caf;border:1px solid #a21caf;border-radius:20px;padding:5px 12px;margin:0 6px 8px 0;cursor:pointer;font-size:13px}
+.card{background:#fff;border:1px solid #e6d9f2;border-radius:10px;padding:12px 16px;margin-top:12px}
+.verdict{font-size:18px;font-weight:700}.v-err{color:#c92a2a}
+.muted{color:#6e5a80;font-size:14px}
+table{width:100%;border-collapse:collapse;font-size:14px;margin-top:8px}td,th{text-align:left;padding:5px 8px;border-bottom:1px solid #f0e8f7;vertical-align:top}th{color:#6e5a80;font-weight:600}
+.mono{font:13.5px ui-monospace,Menlo,Consolas,monospace;word-break:break-all;white-space:pre-wrap}
+tr.win td{background:#f6e7fb}.badge{display:inline-block;font-size:12px;border-radius:10px;padding:0 8px;margin-left:6px;background:#c026d3;color:#fff}.badge.i{background:#dc2626}.badge.n{background:#6e5a80}
+.err{color:#c92a2a;font-size:13px}.note{font-size:12.5px;color:#7c3aed}
+.num b{display:inline-block;min-width:1.6em;text-align:center;border-radius:5px;padding:0 4px;margin-right:3px}
+.na{background:#fde8e8}.nb{background:#fdf1dc}.nc{background:#e8f0fe}
+footer{margin-top:22px;font-size:12.5px;color:#6e5a80}
+</style></head><body><div class="wrap">
+<h1>Spec<span>Why</span></h1>
+<p class="sub">List the CSS selectors that target the same element and property, one per line. See each one's specificity and which rule wins, and why.</p>
+<label for="src">Competing rules, in stylesheet order (top = earliest). Add !important to a line, or start it with @inline for a style="" attribute.</label>
+<textarea id="src" spellcheck="false" aria-label="Competing rules"></textarea>
+<div class="pre" id="pre" style="margin-top:8px"></div>
+<div id="out"></div>
+<footer>Specificity is shown as (IDs, classes/attributes/pseudo-classes, types/pseudo-elements). Checked against the Python cssselect 1.3.0 package on 160,000 generated selectors in the Selectors 3 subset (0 differences; 60,000 were used while debugging, 100,000 were fresh). :is(), :not() and :has() lists, and :where(), follow the MDN Specificity page, which was fetched and used for worked examples. Not tested against an oracle (cssselect handles them differently or not at all): :where, :is, :has, :not with lists, nth-child(... of S). The W3C Selectors 4 page was only partly fetched. Nesting (&), @layer, shadow DOM and element matching are not handled. Everything runs in your browser.</footer>
+</div>
+<script>
+(function(root){
+  'use strict';
+  var LEGACY_PE = {before:1,after:1,'first-line':1,'first-letter':1};
+  var NTH_OF = {'nth-child':1,'nth-last-child':1};
+  function splitTop(s){ // split on top-level commas
+    var out=[],d=0,q=null,cur='',i,c;
+    for(i=0;i<s.length;i++){c=s[i];
+      if(q){cur+=c;if(c==='\\'){cur+=s[++i]||'';}else if(c===q)q=null;continue;}
+      if(c==='\\'){cur+=c+(s[++i]||'');continue;}
+      if(c==='"'||c==="'"){q=c;cur+=c;continue;}
+      if(c==='('||c==='[')d++;else if(c===')'||c===']')d--;
+      if(c===','&&d===0){out.push(cur);cur='';continue;}
+      cur+=c;}
+    out.push(cur);return out;}
+  function readIdent(s,i){var j=i;while(j<s.length){var c=s[j];
+      if(c==='\\'){j+=2;continue;}
+      if(/[A-Za-z0-9_\-]/.test(c)||c.charCodeAt(0)>127)j++;else break;}
+    return j;}
+  function matchParen(s,i){ // s[i]==='(' ; returns index of matching ')'
+    var d=0,q=null,j;
+    for(j=i;j<s.length;j++){var c=s[j];
+      if(q){if(c==='\\')j++;else if(c===q)q=null;continue;}
+      if(c==='\\'){j++;continue;}
+      if(c==='"'||c==="'"){q=c;continue;}
+      if(c==='(')d++;else if(c===')'){d--;if(d===0)return j;}}
+    return -1;}
+  function max(list){var m=[0,0,0];list.forEach(function(r){if(cmp(r,m)>0)m=r;});return m;}
+  function cmp(x,y){for(var i=0;i<3;i++){if(x[i]!==y[i])return x[i]>y[i]?1:-1;}return 0;}
+  // returns {spec:[a,b,c], notes:[]} for one complex selector; throws Error on syntax problems
+  function complex(s,notes){
+    var a=0,b=0,c=0,i=0,n=s.length,expectCompound=true,sawAny=false,ch;
+    function bump(v){a+=v[0];b+=v[1];c+=v[2];}
+    while(i<n){
+      ch=s[i];
+      if(/\s/.test(ch)||ch==='>'||ch==='+'||ch==='~'){
+        if(ch==='>'||ch==='+'||ch==='~'){ if(!sawAny) throw new Error('A combinator "'+ch+'" needs a selector before it'); }
+        i++;continue;}
+      if(ch==='|'&&s[i+1]==='|'){i+=2;continue;}
+      if(ch==='#'){var j=readIdent(s,i+1);if(j===i+1)throw new Error('"#" must be followed by an id');a++;i=j;sawAny=true;continue;}
+      if(ch==='.'){var j2=readIdent(s,i+1);if(j2===i+1)throw new Error('"." must be followed by a class name');b++;i=j2;sawAny=true;continue;}
+      if(ch==='['){var k=i+1,q=null;
+        for(;k<n;k++){var x=s[k];if(q){if(x==='\\')k++;else if(x===q)q=null;continue;}
+          if(x==='\\'){k++;continue;}if(x==='"'||x==="'"){q=x;continue;}if(x===']')break;}
+        if(k>=n)throw new Error('Unclosed "[" in attribute selector');
+        b++;i=k+1;sawAny=true;continue;}
+      if(ch===':'){
+        var pe=s[i+1]===':';var st=i+(pe?2:1);var e=readIdent(s,st);
+        if(e===st)throw new Error('":" must be followed by a pseudo-class or pseudo-element name');
+        var name=s.slice(st,e).toLowerCase();
+        var arg=null;
+        if(s[e]==='('){var cl=matchParen(s,e);if(cl<0)throw new Error('Unclosed "(" after :'+name);arg=s.slice(e+1,cl);e=cl+1;}
+        i=e;sawAny=true;
+        if(pe){c++;continue;}
+        if(arg===null&&LEGACY_PE[name]){c++;continue;}
+        if(name==='where'){notes.push(':where() counts as zero');continue;}
+        if(name==='is'||name==='not'||name==='has'||name==='matches'||name==='-webkit-any'||name==='-moz-any'){
+          if(arg===null)throw new Error(':'+name+' needs an argument list');
+          var inner=listSpec(name==='has'?arg.replace(/(^|,)\s*[>+~]\s*/g,'$1'):arg,notes);
+          var m=max(inner.map(function(r){return r.spec;}));
+          bump(m);
+          if(inner.length>1)notes.push(':'+name+'() takes its most specific argument ('+fmt(m)+')');
+          continue;}
+        if(NTH_OF[name]&&arg!==null){
+          var mm=/\sof\s/i.exec(arg);
+          b++;
+          if(mm){var sel=arg.slice(mm.index+mm[0].length);
+            var inn=listSpec(sel,notes);var m2=max(inn.map(function(r){return r.spec;}));bump(m2);
+            notes.push(':'+name+'(... of S) adds the pseudo-class (0,1,0) plus its most specific selector '+fmt(m2));}
+          continue;}
+        b++;continue;}
+      if(ch==='&'){throw new Error('Nesting selector & is not supported here (its specificity comes from the parent rule)');}
+      if(ch==='*'){var nx=s[i+1];
+        if(nx==='|'&&s[i+2]!=='='){i+=2; if(s[i]==='*'){i++;}else{var j3=readIdent(s,i);if(j3>i){c++;i=j3;}} sawAny=true;continue;}
+        i++;sawAny=true;continue;}
+      if(ch==='|'){ // empty-namespace prefix |a
+        i++;var j4=readIdent(s,i);if(j4>i){c++;i=j4;}else if(s[i]==='*')i++;sawAny=true;continue;}
+      var j5=readIdent(s,i);
+      if(j5>i){
+        if(s[j5]==='|'&&s[j5+1]!=='='){i=j5+1; if(s[i]==='*'){i++;}else{var j6=readIdent(s,i);if(j6>i){c++;i=j6;}}}
+        else{c++;i=j5;}
+        sawAny=true;continue;}
+      throw new Error('Unexpected character "'+ch+'" at position '+i);
+    }
+    if(!sawAny)throw new Error('Empty selector');
+    return [a,b,c];
+  }
+  function fmt(v){return '('+v.join(',')+')';}
+  function listSpec(s,notes){
+    var parts=splitTop(s);
+    return parts.map(function(p){var t=p.trim();
+      if(t==='')throw new Error('Empty selector in list (stray comma?)');
+      return {src:t,spec:complex(t,notes)};});}
+  function analyse(src){
+    var notes=[];
+    var r;
+    try{r=listSpec(src,notes);}catch(e){return {ok:false,error:e.message};}
+    return {ok:true,list:r,notes:notes};}
+  // rank competing declarations: items {src, important}
+  function rank(items){
+    var rows=items.map(function(it,idx){
+      if(it.inline)return {idx:idx,sel:it.sel,important:!!it.important,inline:true,info:{ok:true,list:[],notes:[]},spec:[0,0,0]};
+      var info=analyse(it.sel);
+      var best=null;
+      if(info.ok)best=max(info.list.map(function(r){return r.spec;}));
+      return {idx:idx,sel:it.sel,important:!!it.important,inline:false,info:info,spec:best};});
+    var ok=rows.filter(function(r){return r.info.ok;});
+    ok.sort(function(x,y){
+      if(x.important!==y.important)return x.important?-1:1;
+      if(x.inline!==y.inline)return x.inline?-1:1;
+      var c=cmp(y.spec,x.spec);if(c)return c;return y.idx-x.idx;});
+    return {rows:rows,order:ok};}
+  var api={analyse:analyse,rank:rank,splitTop:splitTop,cmp:cmp};
+  if(typeof module!=='undefined'&&module.exports)module.exports=api;else root.SpecWhy=api;
+})(typeof window!=='undefined'?window:globalThis);
+</script>
+<script>
+(function(){
+var $=function(i){return document.getElementById(i)};
+function esc(s){return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')}
+function parseLines(t){var items=[];t.split('\n').forEach(function(l){var s=l.trim();if(!s)return;
+ var imp=false,inl=false;
+ var m=/\s*!important\s*;?$/i.exec(s);if(m){imp=true;s=s.slice(0,m.index).trim();}
+ if(/^@inline\b/i.test(s)){inl=true;s=s.replace(/^@inline\s*/i,'')||'style attribute';}
+ s=s.replace(/\s*\{[\s\S]*$/,'').trim();
+ items.push({sel:s,important:imp,inline:inl});});return items}
+function num(v){return '<span class="num"><b class="na">'+v[0]+'</b><b class="nb">'+v[1]+'</b><b class="nc">'+v[2]+'</b></span>'}
+function why(w,l){
+ if(!l)return 'only rule';
+ if(w.important!==l.important)return 'it has !important and the other does not';
+ if(w.inline!==l.inline)return 'inline styles beat any selector';
+ var c=SpecWhy.cmp(w.spec,l.spec);
+ if(c>0){var k=w.spec[0]!==l.spec[0]?0:(w.spec[1]!==l.spec[1]?1:2);return 'higher '+['ID','class/attribute/pseudo-class','type/pseudo-element'][k]+' count ('+w.spec[k]+' vs '+l.spec[k]+')'}
+ return 'same specificity, so the later rule wins'}
+function ord(n){return n+(n===2?'nd':n===3?'rd':'th')}
+function run(){
+ var items=parseLines($('src').value);
+ if(!items.length){$('out').innerHTML='<div class="card muted">Type one selector per line.</div>';return}
+ var r=SpecWhy.rank(items),h='';
+ var win=r.order[0], lose=r.order[1];
+ if(win){h+='<div class="card"><div class="verdict">Winner: <span class="mono">'+esc(win.inline?'style attribute':win.sel)+'</span></div><p class="muted">'+(r.order.length>1?'Wins over the next rule because '+esc(why(win,lose)):'Only one valid rule.')+'.</p></div>'}
+ h+='<div class="card"><table><tr><th>Order</th><th>Selector</th><th>Specificity</th><th>Rank</th></tr>';
+ r.rows.forEach(function(row){var pos=r.order.indexOf(row);
+  h+='<tr'+(pos===0?' class="win"':'')+'><td>'+(row.idx+1)+'</td><td class="mono">'+esc(row.inline?'style attribute':row.sel)+(row.important?'<span class="badge i">!important</span>':'')+(row.inline?'<span class="badge n">inline</span>':'')+'</td><td>';
+  if(!row.info.ok)h+='<div class="err">'+esc(row.info.error)+'</div>';
+  else{
+   if(row.inline)h+='<span class="muted">above any selector</span>';
+   else{if(row.info.list.length>1){h+=row.info.list.map(function(x){return '<div><span class="mono">'+esc(x.src)+'</span> '+num(x.spec)+'</div>'}).join('')+'<div class="muted">the most specific one counts: </div>'}
+    h+=num(row.spec);}
+   var seen={};row.info.notes.forEach(function(n){if(!seen[n]){seen[n]=1;h+='<div class="note">'+esc(n)+'</div>'}});}
+  h+='</td><td>'+(pos<0?'-':pos===0?'1st (wins)':ord(pos+1))+'</td></tr>'});
+ h+='</table></div>';$('out').innerHTML=h}
+var P=[["Class vs ID","#nav a\n.menu .item a\nnav ul li a"],["Ties","p.intro\np.intro"],["!important","#id .a .b\n.c !important\n#id #id2"],["Inline","@inline\n#a #b #c #d"],["Lists","h1, #x\n.a.b.c"],[":is :not :where","div:is(.a, #b) p\n:where(#a #b) p\ndiv:not(.c, #d) p"],["Pseudo-elements","a::before\na:hover::after\nul li::marker"],["Bad selector","div..a\n> p\n.ok"],["MDN :has","h1:has(+ h2, > #fakeId)\nh1.big.bold"]];
+$('pre').innerHTML=P.map(function(p,i){return '<button data-i="'+i+'">'+esc(p[0])+'</button>'}).join('');
+$('pre').addEventListener('click',function(e){var b=e.target.closest('button');if(!b)return;$('src').value=P[+b.dataset.i][1];run()});
+$('src').addEventListener('input',run);$('src').value=P[0][1];run();
+})();
+</script>
+</body></html>
