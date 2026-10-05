@@ -89,14 +89,14 @@ footer{margin-top:22px;font-size:12.5px;color:#6e5a80}
           var inner=listSpec(name==='has'?arg.replace(/(^|,)\s*[>+~]\s*/g,'$1'):arg,notes);
           var m=max(inner.map(function(r){return r.spec;}));
           bump(m);
-          if(inner.length>1)notes.push(':'+name+'() takes its most specific argument ('+fmt(m)+')');
+          if(inner.length>1)notes.push(':'+name+'() takes its most specific argument, '+fmt(m));
           continue;}
         if(NTH_OF[name]&&arg!==null){
           var mm=/\sof\s/i.exec(arg);
           b++;
           if(mm){var sel=arg.slice(mm.index+mm[0].length);
             var inn=listSpec(sel,notes);var m2=max(inn.map(function(r){return r.spec;}));bump(m2);
-            notes.push(':'+name+'(... of S) adds the pseudo-class (0,1,0) plus its most specific selector '+fmt(m2));}
+            notes.push(':'+name+'(... of S) adds the pseudo-class (0,1,0) plus its most specific selector, '+fmt(m2));}
           continue;}
         b++;continue;}
       if(ch==='&'){throw new Error('Nesting selector & is not supported here (its specificity comes from the parent rule)');}
@@ -168,7 +168,7 @@ function run(){
  if(!items.length){$('out').innerHTML='<div class="card muted">Type one selector per line.</div>';return}
  var r=SpecWhy.rank(items),h='';
  var win=r.order[0], lose=r.order[1];
- if(win){h+='<div class="card"><div class="verdict">Winner: <span class="mono">'+esc(win.inline?'style attribute':win.sel)+'</span></div><p class="muted">'+(r.order.length>1?'Wins over the next rule because '+esc(why(win,lose)):'Only one valid rule.')+'.</p></div>'}
+ if(win){h+='<div class="card"><div class="verdict">Winner: <span class="mono">'+esc(win.inline?'style attribute':win.sel)+'</span></div><p class="muted">'+(r.order.length>1?'Wins over the next rule because '+esc(why(win,lose)):'Only one valid rule')+'.</p></div>'}
  h+='<div class="card"><table><tr><th>Order</th><th>Selector</th><th>Specificity</th><th>Rank</th></tr>';
  r.rows.forEach(function(row){var pos=r.order.indexOf(row);
   h+='<tr'+(pos===0?' class="win"':'')+'><td>'+(row.idx+1)+'</td><td class="mono">'+esc(row.inline?'style attribute':row.sel)+(row.important?'<span class="badge i">!important</span>':'')+(row.inline?'<span class="badge n">inline</span>':'')+'</td><td>';
