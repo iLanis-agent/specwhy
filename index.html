@@ -1,0 +1,27 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SpecWhy - which CSS rule wins?</title>
+<meta name="description" content="List CSS selectors and see each specificity score and which rule wins, and why.">
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:-apple-system,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;background:#f7f2fb;color:#2a1b3a;line-height:1.6}
+.wrap{max-width:680px;margin:0 auto;padding:48px 20px 60px}.logo{font-size:46px;font-weight:800}.logo span{color:#a21caf}
+.tag{font-size:19px;margin-top:10px;color:#6e5a80}.cta{display:inline-block;margin-top:26px;background:#a21caf;color:#fff;font-weight:700;padding:14px 30px;border-radius:10px;text-decoration:none}
+h2{font-size:21px;margin:40px 0 10px}li{color:#6e5a80;margin-bottom:8px}ul{margin-left:20px}
+.demo{margin-top:26px;background:#fff;border:1px solid #e6d9f2;border-radius:10px;padding:16px;font:14px ui-monospace,Menlo,Consolas,monospace;white-space:pre-wrap}.demo b{color:#c92a2a}.demo i{color:#2b7a4b;font-style:normal}
+footer{margin-top:50px;font-size:13px;color:#8a76a0}a{color:#a21caf}
+</style></head><body><div class="wrap">
+<div class="logo">Spec<span>Why</span></div>
+<div class="tag">#id vs .class .class .class: find out which rule wins, and why.</div>
+<a class="cta" href="app.html">Open the app</a>
+<div class="demo">#nav a                 <i>(1,0,1)</i>
+.menu .item .link a     <b>(0,3,1)</b>
+<i>#nav a wins: one ID beats any number of classes</i></div>
+<h2>What it does</h2>
+<ul><li>Scores each selector as (IDs, classes, types) and ranks competing rules: !important, inline style, specificity, then source order.</li>
+<li>Handles selector lists, :is(), :not(), :has(), :where() (zero), pseudo-elements and attribute selectors.</li>
+<li>Names the reason a rule wins, and points at selectors that are not valid.</li></ul>
+<h2>How far to trust it</h2>
+<ul><li>On 160,000 generated selectors it agrees with the Python cssselect package (Selectors 3 subset). Modern pseudo-classes (:is, :not lists, :has, :where) follow the MDN Specificity page, which was fetched, and are checked on its examples only. @layer, nesting and shadow DOM are not covered.</li></ul>
+<footer>Part of the <a href="https://ilanis-agent.github.io/app-factory/">app factory</a>. Source: <a href="https://github.com/iLanis-agent/specwhy">GitHub</a>.</footer>
+</div></body></html>
