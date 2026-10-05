@@ -58,14 +58,14 @@
           var inner=listSpec(name==='has'?arg.replace(/(^|,)\s*[>+~]\s*/g,'$1'):arg,notes);
           var m=max(inner.map(function(r){return r.spec;}));
           bump(m);
-          if(inner.length>1)notes.push(':'+name+'() takes its most specific argument ('+fmt(m)+')');
+          if(inner.length>1)notes.push(':'+name+'() takes its most specific argument, '+fmt(m));
           continue;}
         if(NTH_OF[name]&&arg!==null){
           var mm=/\sof\s/i.exec(arg);
           b++;
           if(mm){var sel=arg.slice(mm.index+mm[0].length);
             var inn=listSpec(sel,notes);var m2=max(inn.map(function(r){return r.spec;}));bump(m2);
-            notes.push(':'+name+'(... of S) adds the pseudo-class (0,1,0) plus its most specific selector '+fmt(m2));}
+            notes.push(':'+name+'(... of S) adds the pseudo-class (0,1,0) plus its most specific selector, '+fmt(m2));}
           continue;}
         b++;continue;}
       if(ch==='&'){throw new Error('Nesting selector & is not supported here (its specificity comes from the parent rule)');}
